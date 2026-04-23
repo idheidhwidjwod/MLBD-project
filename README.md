@@ -25,8 +25,15 @@ here — e.g. mixed-effects models, knowledge tracing, etc.].
 ## Repository Structure
 
 ## Setup
+
+Clone the repository:
 ```bash
-conda activate ada
+git clone https://github.com/idheidhwidjwod/MLBD-project.git
+cd MLBD-project
+```
+
+Install dependencies:
+```bash
 pip install -r requirements.txt
 ```
 
