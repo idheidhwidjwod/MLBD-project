@@ -23,3 +23,16 @@ here — e.g. mixed-effects models, knowledge tracing, etc.].
 - Does transfer differ between Math and German?
 
 ## Repository Structure
+
+## Setup
+```bash
+conda activate ada
+pip install -r requirements.txt
+```
+
+## Data
+Data provided by Lernavi. Not publicly available — place files in `data/`
+before running notebooks.
+
+## Results
+*To be completed.*
