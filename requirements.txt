@@ -1,5 +1,7 @@
-pandas==3.0.2
+pandas==2.2.3
 numpy==1.26.4
-scikit-learn==1.8.0
-matplotlib==3.10.8
+scikit-learn==1.5.2
+matplotlib==3.9.2
 seaborn==0.13.2
+tensorflow-macos==2.15.0
+tensorflow-metal==1.1.0
