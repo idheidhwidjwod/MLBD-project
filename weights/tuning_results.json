@@ -1,0 +1,26 @@
+[
+  {
+    "dropout_rate": 0.0,
+    "recurrent_units": 16,
+    "val_auc": 0.6696731448173523,
+    "val_loss": 0.1561342179775238
+  },
+  {
+    "dropout_rate": 0.0,
+    "recurrent_units": 64,
+    "val_auc": 0.6902422308921814,
+    "val_loss": 0.1536189317703247
+  },
+  {
+    "dropout_rate": 0.0,
+    "recurrent_units": 256,
+    "val_auc": 0.7093504071235657,
+    "val_loss": 0.15059423446655273
+  },
+  {
+    "dropout_rate": 0.1,
+    "recurrent_units": 16,
+    "val_auc": 0.6712656021118164,
+    "val_loss": 0.1560405045747757
+  }
+]
