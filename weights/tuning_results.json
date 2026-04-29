@@ -22,5 +22,35 @@
     "recurrent_units": 16,
     "val_auc": 0.6712656021118164,
     "val_loss": 0.1560405045747757
+  },
+  {
+    "dropout_rate": 0.1,
+    "recurrent_units": 64,
+    "val_auc": 0.7010228633880615,
+    "val_loss": 0.15227541327476501
+  },
+  {
+    "dropout_rate": 0.1,
+    "recurrent_units": 256,
+    "val_auc": 0.7031605243682861,
+    "val_loss": 0.15165144205093384
+  },
+  {
+    "dropout_rate": 0.3,
+    "recurrent_units": 16,
+    "val_auc": 0.6835246086120605,
+    "val_loss": 0.1546713262796402
+  },
+  {
+    "dropout_rate": 0.3,
+    "recurrent_units": 64,
+    "val_auc": 0.6956081390380859,
+    "val_loss": 0.1527867317199707
+  },
+  {
+    "dropout_rate": 0.3,
+    "recurrent_units": 256,
+    "val_auc": 0.6996188163757324,
+    "val_loss": 0.15153253078460693
   }
 ]
