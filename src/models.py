@@ -20,32 +20,41 @@ def create_iterator(data):
     return model_selection.GroupShuffleSplit(n_splits=1, train_size=.8, test_size=0.2, random_state=0).split(X, groups=groups)
 
 
+N_AUX_FEATURES = 2  # can_partial, time_since_first_attempt (days)
+
+
 def prepare_data(seq, params, features_depth, skill_depth):
     dataset = tf.data.Dataset.from_generator(
         generator=lambda: seq,
         output_signature=(
-            tf.TensorSpec(shape=None, dtype=tf.int32),   # past skill_with_answer
-            tf.TensorSpec(shape=None, dtype=tf.int32),   # next skill
-            tf.TensorSpec(shape=None, dtype=tf.int32),   # next eval (label)
+            tf.TensorSpec(shape=None, dtype=tf.int32),     # past skill_with_answer
+            tf.TensorSpec(shape=None, dtype=tf.int32),     # next skill
+            tf.TensorSpec(shape=None, dtype=tf.int32),     # next eval (label)
+            tf.TensorSpec(shape=None, dtype=tf.float32),   # next can_partial
+            tf.TensorSpec(shape=None, dtype=tf.float32),   # next time_since_first
         ),
     )
 
-    def to_xy(feat, skill, label):
+    feat_dim = features_depth + N_AUX_FEATURES
+
+    def to_xy(feat, skill, label, can_partial, time_since):
         feat_oh = tf.one_hot(feat, depth=features_depth)
-        weight  = tf.ones_like(label, dtype=tf.float32)
-        return {'features': feat_oh, 'next_skill': skill}, label, weight
+        aux = tf.stack([can_partial, time_since], axis=-1)  # (T, 2)
+        feat_full = tf.concat([feat_oh, aux], axis=-1)      # (T, features_depth + 2)
+        weight = tf.ones_like(label, dtype=tf.float32)
+        return {'features': feat_full, 'next_skill': skill}, label, weight
 
     dataset = dataset.map(to_xy)
 
     dataset = dataset.padded_batch(
-    batch_size=params['batch_size'],
-    padded_shapes=({'features': [None, features_depth],
-                    'next_skill': [None]},
-                    [None], [None]),
-    padding_values=({'features': 0.0, 'next_skill': 0},
-                    0, 0.0),
-    drop_remainder=True,
-)
+        batch_size=params['batch_size'],
+        padded_shapes=({'features': [None, feat_dim],
+                        'next_skill': [None]},
+                       [None], [None]),
+        padding_values=({'features': 0.0, 'next_skill': 0},
+                        0, 0.0),
+        drop_remainder=True,
+    )
     return dataset.repeat(), len(seq)
 
 
@@ -91,7 +100,10 @@ class GatherSkill(tf.keras.layers.Layer):
 
 
 def create_model_lstm(nb_features, nb_skills, params):
-    feat_in  = tf.keras.Input(shape=(None, nb_features), name='features')
+    # `nb_features` is the one-hot skill_with_answer width; prepare_data also
+    # appends N_AUX_FEATURES auxiliary per-step features (can_partial,
+    # time_since_first_attempt), so the actual input width is wider.
+    feat_in  = tf.keras.Input(shape=(None, nb_features + N_AUX_FEATURES), name='features')
     skill_in = tf.keras.Input(shape=(None,), dtype=tf.int32, name='next_skill')
 
     # x = tf.keras.layers.Masking(mask_value=0.0)(feat_in)

@@ -52,5 +52,11 @@
     "recurrent_units": 256,
     "val_auc": 0.6996188163757324,
     "val_loss": 0.15153253078460693
+  },
+  {
+    "dropout_rate": 0.0,
+    "recurrent_units": 1024,
+    "val_auc": 0.7098609805107117,
+    "val_loss": 0.15060587227344513
   }
 ]

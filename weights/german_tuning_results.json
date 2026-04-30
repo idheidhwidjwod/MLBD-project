@@ -1,0 +1,62 @@
+[
+  {
+    "dropout_rate": 0.0,
+    "recurrent_units": 16,
+    "val_auc": 0.6741316914558411,
+    "val_loss": 0.15012134611606598
+  },
+  {
+    "dropout_rate": 0.0,
+    "recurrent_units": 64,
+    "val_auc": 0.7280532717704773,
+    "val_loss": 0.14001497626304626
+  },
+  {
+    "dropout_rate": 0.0,
+    "recurrent_units": 256,
+    "val_auc": 0.7318270802497864,
+    "val_loss": 0.13779793679714203
+  },
+  {
+    "dropout_rate": 0.1,
+    "recurrent_units": 16,
+    "val_auc": 0.6756410598754883,
+    "val_loss": 0.1498699188232422
+  },
+  {
+    "dropout_rate": 0.1,
+    "recurrent_units": 64,
+    "val_auc": 0.7070748209953308,
+    "val_loss": 0.14429907500743866
+  },
+  {
+    "dropout_rate": 0.1,
+    "recurrent_units": 256,
+    "val_auc": 0.7175539135932922,
+    "val_loss": 0.1410359889268875
+  },
+  {
+    "dropout_rate": 0.3,
+    "recurrent_units": 16,
+    "val_auc": 0.677341639995575,
+    "val_loss": 0.149497851729393
+  },
+  {
+    "dropout_rate": 0.3,
+    "recurrent_units": 64,
+    "val_auc": 0.679133415222168,
+    "val_loss": 0.14837546646595
+  },
+  {
+    "dropout_rate": 0.3,
+    "recurrent_units": 256,
+    "val_auc": 0.7021237015724182,
+    "val_loss": 0.14448317885398865
+  },
+  {
+    "dropout_rate": 0.0,
+    "recurrent_units": 1024,
+    "val_auc": 0.7338520884513855,
+    "val_loss": 0.13800916075706482
+  }
+]
