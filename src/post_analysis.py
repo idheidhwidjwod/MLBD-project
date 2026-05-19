@@ -583,6 +583,31 @@ def add_reverse_directionality(outcome_df):
     return merged
 
 
+def prerequisite_score(outcome_df):
+    """Antisymmetric prerequisite score f(A, B) ∈ [-1, 1].
+
+    f(A,B) = (directionality(B→A) − directionality(A→B)) / 2
+           = −asymmetry / 2
+
+    Properties
+    ----------
+    f(A,B) = +1  →  A is a strong prerequisite of B
+    f(A,B) = −1  →  B is a strong prerequisite of A
+    f(A,B) =  0  →  complementary / symmetric
+    f(A,B) = −f(B,A)          (antisymmetric by construction)
+    f(A,A) =  0
+
+    Expects the output of add_reverse_directionality() as input
+    (columns 'directionality' and 'reverse_directionality' must exist).
+    Adds a 'prerequisite_score' column in-place on a copy.
+    """
+    if 'reverse_directionality' not in outcome_df.columns:
+        outcome_df = add_reverse_directionality(outcome_df)
+    df = outcome_df.copy()
+    df['prerequisite_score'] = (df['reverse_directionality'] - df['directionality']) / 2
+    return df
+
+
 def annotate_skill_interactions(long, skill_info, child_to_parent, focus_topic_ids=None):
     """Attach topic metadata + tree-relation label to a skill-level `long` table.
     If `focus_topic_ids` is given, restrict to skills whose topic_id is in it."""
