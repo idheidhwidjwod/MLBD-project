@@ -608,6 +608,149 @@ def prerequisite_score(outcome_df):
     return df
 
 
+def build_curriculum_graph(prereq_df, strength_percentile=50, f_percentile=50):
+    """Build a curriculum DAG from prerequisite scores.
+
+    Algorithm (per ADR 0001):
+    1. Keep only edges where prerequisite_score > 0  (direction: A is prerequisite of B)
+    2. Strength floor: drop edges below `strength_percentile` of remaining strength values
+    3. f ranking: keep top (100 - f_percentile)% by prerequisite_score among survivors
+    4. Sort by prerequisite_score descending; add each edge unless it creates a cycle
+
+    Parameters
+    ----------
+    prereq_df          : output of prerequisite_score() — must have columns
+                         source_topic, target_topic, prerequisite_score, strength,
+                         source_name, target_name
+    strength_percentile: percentile used as the strength reliability floor (default 50)
+    f_percentile       : percentile used as the f quality cutoff among survivors (default 50)
+
+    Returns
+    -------
+    edges_df : DataFrame of accepted edges (columns: source_topic, target_topic,
+               source_name, target_name, prerequisite_score, strength, relation)
+    G        : networkx.DiGraph — nodes are topic_ids, edge attributes: f, strength
+    """
+    try:
+        import networkx as nx
+    except ImportError:
+        raise ImportError("networkx is required: pip install networkx")
+
+    df = prereq_df.dropna(subset=['prerequisite_score', 'strength']).copy()
+
+    # Step 1 — keep only directed edges (f > 0 means source is prerequisite of target)
+    df = df[df['prerequisite_score'] > 0]
+
+    # Step 2 — strength floor
+    strength_floor = df['strength'].quantile(strength_percentile / 100)
+    df = df[df['strength'] >= strength_floor]
+
+    # Step 3 — f quality cutoff among survivors
+    f_cutoff = df['prerequisite_score'].quantile(f_percentile / 100)
+    df = df[df['prerequisite_score'] >= f_cutoff]
+
+    # Step 4 — greedy acyclic addition
+    df = df.sort_values('prerequisite_score', ascending=False).reset_index(drop=True)
+
+    all_topics = set(df['source_topic']).union(df['target_topic'])
+    G = nx.DiGraph()
+    G.add_nodes_from(all_topics)
+
+    # Attach topic names as node attributes for visualisation
+    name_map = (
+        dict(zip(df['source_topic'], df['source_name'])) |
+        dict(zip(df['target_topic'], df['target_name']))
+    )
+    nx.set_node_attributes(G, name_map, 'name')
+
+    accepted = []
+    for _, row in df.iterrows():
+        u, v = row['source_topic'], row['target_topic']
+        # Adding u→v is safe iff v cannot already reach u
+        if not nx.has_path(G, v, u):
+            G.add_edge(u, v, f=row['prerequisite_score'], strength=row['strength'])
+            accepted.append(row)
+
+    keep_cols = [c for c in
+                 ['source_topic', 'target_topic', 'source_name', 'target_name',
+                  'prerequisite_score', 'strength', 'relation']
+                 if c in df.columns]
+    edges_df = (pd.DataFrame(accepted)[keep_cols].reset_index(drop=True)
+                if accepted else pd.DataFrame(columns=keep_cols))
+    return edges_df, G
+
+
+def plot_curriculum_graph(G, subject, ax=None, figsize=(14, 7)):
+    """Draw the curriculum DAG with a left-to-right topological layout.
+
+    Nodes are coloured by their topological generation (depth in the prerequisite
+    chain). Edge colour and width encode the prerequisite_score f.
+    """
+    try:
+        import networkx as nx
+        import matplotlib.pyplot as plt
+        import matplotlib.cm as cm
+        import matplotlib.colors as mcolors
+    except ImportError:
+        raise ImportError("networkx and matplotlib are required")
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+
+    if len(G.nodes) == 0:
+        ax.set_title(f'{subject} — Curriculum Graph (empty)')
+        return
+
+    # Topological generations → x-coordinate (learning order left→right)
+    generations = list(nx.topological_generations(G))
+    pos = {}
+    for gen_idx, gen in enumerate(generations):
+        gen = sorted(gen)
+        for node_idx, node in enumerate(gen):
+            y = node_idx - (len(gen) - 1) / 2
+            pos[node] = (gen_idx, y)
+
+    # Node colour by generation depth
+    gen_of = {node: i for i, gen in enumerate(generations) for node in gen}
+    n_gens  = max(gen_of.values()) + 1 if gen_of else 1
+    node_colours = [cm.Blues(0.35 + 0.55 * gen_of[n] / max(n_gens - 1, 1))
+                    for n in G.nodes()]
+
+    labels = {n: G.nodes[n].get('name', str(n)) for n in G.nodes()}
+
+    nx.draw_networkx_nodes(G, pos, ax=ax,
+                           node_color=node_colours, node_size=2200, alpha=0.9)
+    nx.draw_networkx_labels(G, pos, labels=labels, ax=ax,
+                            font_size=7, font_weight='bold')
+
+    if G.edges():
+        f_vals = [G[u][v]['f'] for u, v in G.edges()]
+        f_norm = mcolors.Normalize(vmin=min(f_vals), vmax=max(f_vals))
+        edge_colours = [cm.Reds(f_norm(f)) for f in f_vals]
+        edge_widths  = [1.5 + 3.5 * f_norm(f) for f in f_vals]
+        nx.draw_networkx_edges(G, pos, ax=ax,
+                               edge_color=edge_colours, width=edge_widths,
+                               arrows=True, arrowsize=18,
+                               connectionstyle='arc3,rad=0.08',
+                               min_source_margin=30, min_target_margin=30)
+        sm = cm.ScalarMappable(cmap=cm.Reds, norm=f_norm)
+        sm.set_array([])
+        plt.colorbar(sm, ax=ax, label='prerequisite score f', shrink=0.6)
+
+    isolated = list(nx.isolates(G))
+    if isolated:
+        iso_names = [G.nodes[n].get('name', str(n)) for n in isolated]
+        ax.annotate(f"Isolated (no strong signal): {', '.join(iso_names)}",
+                    xy=(0.01, 0.01), xycoords='axes fraction',
+                    fontsize=7, color='gray', style='italic')
+
+    ax.set_title(f'{subject} — Curriculum Graph\n'
+                 f'({len(G.edges())} edges, {len(G.nodes())} topics, '
+                 f'{len(isolated)} isolated)',
+                 fontsize=11, fontweight='bold')
+    ax.axis('off')
+
+
 def annotate_skill_interactions(long, skill_info, child_to_parent, focus_topic_ids=None):
     """Attach topic metadata + tree-relation label to a skill-level `long` table.
     If `focus_topic_ids` is given, restrict to skills whose topic_id is in it."""
