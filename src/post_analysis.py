@@ -611,7 +611,7 @@ def prerequisite_score(outcome_df):
 def build_curriculum_graph(prereq_df, strength_percentile=50, f_percentile=50):
     """Build a curriculum DAG from prerequisite scores.
 
-    Algorithm (per ADR 0001):
+    Algorithm :
     1. Keep only edges where prerequisite_score > 0  (direction: A is prerequisite of B)
     2. Strength floor: drop edges below `strength_percentile` of remaining strength values
     3. f ranking: keep top (100 - f_percentile)% by prerequisite_score among survivors
@@ -726,10 +726,9 @@ def plot_curriculum_graph(G, subject, ax=None, figsize=(14, 7)):
     if G.edges():
         f_vals = [G[u][v]['f'] for u, v in G.edges()]
         f_norm = mcolors.Normalize(vmin=min(f_vals), vmax=max(f_vals))
-        edge_colours = [cm.Reds(f_norm(f)) for f in f_vals]
-        edge_widths  = [1.5 + 3.5 * f_norm(f) for f in f_vals]
+        edge_colours = [cm.Reds(0.35 + 0.65 * f_norm(f)) for f in f_vals]
         nx.draw_networkx_edges(G, pos, ax=ax,
-                               edge_color=edge_colours, width=edge_widths,
+                               edge_color=edge_colours, width=2.0,
                                arrows=True, arrowsize=18,
                                connectionstyle='arc3,rad=0.08',
                                min_source_margin=30, min_target_margin=30)
