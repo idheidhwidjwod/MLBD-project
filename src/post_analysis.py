@@ -684,7 +684,8 @@ def plot_curriculum_graph(G, subject, ax=None, figsize=(14, 7)):
     """Draw the curriculum DAG with a left-to-right topological layout.
 
     Nodes are coloured by their topological generation (depth in the prerequisite
-    chain). Edge colour and width encode the prerequisite_score f.
+    chain). Edges have uniform width; colour encodes interaction strength so
+    high-confidence edges stand out regardless of their f magnitude.
     """
     try:
         import networkx as nx
@@ -710,9 +711,9 @@ def plot_curriculum_graph(G, subject, ax=None, figsize=(14, 7)):
             y = node_idx - (len(gen) - 1) / 2
             pos[node] = (gen_idx, y)
 
-    # Node colour by generation depth
+    # Node colour by generation depth (light → dark blue as topics get later)
     gen_of = {node: i for i, gen in enumerate(generations) for node in gen}
-    n_gens  = max(gen_of.values()) + 1 if gen_of else 1
+    n_gens = max(gen_of.values()) + 1 if gen_of else 1
     node_colours = [cm.Blues(0.35 + 0.55 * gen_of[n] / max(n_gens - 1, 1))
                     for n in G.nodes()]
 
@@ -724,17 +725,19 @@ def plot_curriculum_graph(G, subject, ax=None, figsize=(14, 7)):
                             font_size=7, font_weight='bold')
 
     if G.edges():
-        f_vals = [G[u][v]['f'] for u, v in G.edges()]
-        f_norm = mcolors.Normalize(vmin=min(f_vals), vmax=max(f_vals))
-        edge_colours = [cm.Reds(0.35 + 0.65 * f_norm(f)) for f in f_vals]
+        # Colour by strength (interaction intensity) — uniform width so weak-f
+        # edges are not invisible; strength is the reliability signal anyway.
+        s_vals = [G[u][v]['strength'] for u, v in G.edges()]
+        s_norm = mcolors.Normalize(vmin=min(s_vals), vmax=max(s_vals))
+        edge_colours = [cm.Oranges(0.35 + 0.65 * s_norm(s)) for s in s_vals]
         nx.draw_networkx_edges(G, pos, ax=ax,
                                edge_color=edge_colours, width=2.0,
                                arrows=True, arrowsize=18,
                                connectionstyle='arc3,rad=0.08',
                                min_source_margin=30, min_target_margin=30)
-        sm = cm.ScalarMappable(cmap=cm.Reds, norm=f_norm)
+        sm = cm.ScalarMappable(cmap=cm.Oranges, norm=s_norm)
         sm.set_array([])
-        plt.colorbar(sm, ax=ax, label='prerequisite score f', shrink=0.6)
+        plt.colorbar(sm, ax=ax, label='strength  (mean |ΔP(correct)|)', shrink=0.6)
 
     isolated = list(nx.isolates(G))
     if isolated:
