@@ -26,7 +26,7 @@ Since 2 complementary approaches were developed for RQ1, the project is organize
 
 - `RQ1_DKT_post_analysis.ipynb` analyzes the results from the trained DKT model obtained after analysis.
 
-**RQ2 (ethical research question)** is investigated by the `RQ2_ethical_analysis.ipynb` notebook. It evaluates whether a dropout prediction model produces unequal prediction errors across users’ gender and school track. **[TO DO THYBAULT]**
+**RQ2 (ethical research question)** is investigated by the `RQ2_ethical_analysis.ipynb` notebook. It evaluates whether a dropout prediction model produces unequal prediction errors across users' gender and school track. A **Random Forest classifier** is trained on three week-0 behavioural features (`n_tasks`, `avg_score`, `avg_diff`) to predict whether a student will leave the platform before week 3. Fairness is evaluated across gender and school track (Gymnasium vs. Vocational) using Demographic Parity (chi-square, Cramér's V), Equalized Odds (TPR/FPR gaps with Wilson confidence intervals), the Impossibility Result (Chouldechova, 2017), and **TreeSHAP** explainability to identify which features drive the model's predictions.
 
 ## Setup
 
@@ -194,9 +194,45 @@ to train, so 256 units was kept for both subjects.
 | % pairs: A is prerequisite of B | 7.1 % | 38.6 % |
 | % complementary (\|d\| < 0.1) | 55.2 % | 22.4 % |
 
-### RQ2:
+### RQ2 — Fairness audit of the dropout prediction model
 
-[TO DO THYBAULT]
+
+
+| Attribute | OOB AUC | TPR gap | FPR gap | Equalized Odds |
+
+|-----------|---------|---------|---------|----------------|
+
+| Gender | 0.566 | 0.003 | 0.002 | ✅ Fair |
+
+| School track | 0.566 | 0.030 | 0.028 | ❌ Violated |
+
+
+
+n = 18,330 students · overall dropout rate = 47.4% · OOB accuracy = 0.556
+
+
+
+**Impossibility Result** (Chouldechova, 2017): applies for school track (base rate diff = 0.028 > 0.02, AUC > 0.5) — Demographic Parity, Equalized Odds, and Predictive Value Parity cannot all be satisfied simultaneously. Does not apply for gender (base rate diff = 0.018).
+
+
+
+**SHAP feature importance** (dropout class):
+
+
+
+| Feature | RF importance | SHAP mean \|value\| |
+
+|---------|:---:|:---:|
+
+| `avg_diff` | 0.405 | 0.0146 |
+
+| `n_tasks` | 0.335 | 0.0193 |
+
+| `avg_score` | 0.260 | 0.0089 |
+
+
+
+Top predictor by SHAP: `n_tasks` (students who attempt more exercises in week 0 are less likely to drop out). `avg_diff` ranks first by RF importance due to high variance but contributes less to individual predictions. Since `avg_diff` is set by Lernnavi's adaptive algorithm, its presence in the model raises a design concern.
 
 **Key findings:**
 
@@ -226,6 +262,12 @@ to train, so 256 units was kept for both subjects.
   consistent with a domain where many skills are practiced in parallel rather than
   sequentially.
 
-3. RQ2: 
+3. RQ2:
 
-[TO DO THYBAULT]
+- The model is **fair across gender**: TPR gap = 0.003, FPR gap = 0.002 — errors are symmetric between female and male students.
+
+- The model is **unfair across school track**: Vocational students are falsely flagged as at-risk 2.8 pp more often than Gymnasium students (FPR gap = 0.028). In Switzerland, school track is a socioeconomic proxy — deploying this model as-is would disproportionately target an already more vulnerable group with unnecessary interventions.
+
+- The **Impossibility Result** applies for school track: no model can simultaneously satisfy Demographic Parity, Equalized Odds, and Predictive Value Parity. A deployment decision must explicitly choose which fairness criterion to prioritise.
+
+- **TreeSHAP** identifies `n_tasks` as the main predictor. Since `avg_diff` is controlled by Lernnavi's algorithm rather than the student, the model partially penalises students for a platform decision — a structural concern that should be audited before deployment.
