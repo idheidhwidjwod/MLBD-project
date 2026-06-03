@@ -1,55 +1,91 @@
-# Knowledge Transfer in E-Learning: A Study on Lernavi
+# Transfer of Learning and Fairness in Dropout Prediction: A Study on Lernnavi
 
-Investigating how mastering one topic influences the learning of related topics
-in an e-learning context.
+This project was conducted as part of the Machine Learning for Behavioral Data (MLBD) course at EPFL. The data were provided by Lernnavi, a Swiss educational platform online that offers lessons and exercises in German and mathematics for high-school students and recommends tasks based on each student's learning progress.
 
-## Team
+## Team: R3
+
 - Christophe CHARBONNEL
 - Romane VORWALD
 - Thybault LORTHIOIS
 
-## Overview
-This project analyzes data from **Lernavi**, a Swiss e-learning platform for
-Math and German. We investigate whether and how a student's learning progress
-on one topic transfers to related topics, for example, whether mastering
-linear equations accelerates learning of quadratic equations.
+## Overview & Research Questions
 
-We train a **Deep Knowledge Tracing (DKT)** model — a per-user LSTM that, at
-each timestep, predicts the evaluation of the student's *next* attempt
-(`WRONG / PARTIAL / CORRECT`) on a given skill. After training, we extract
-**pairwise topic-interaction signals** from the model to quantify transfer
-strength and directionality between topic pairs.
+This project investigate 2 separate research questions:
 
-## Research Questions
-- Does prior mastery of topic A accelerate learning on related topic B?
-- Which topic pairs show the strongest transfer effects?
-- Does transfer differ between Math and German?
+1. RQ1: **To what extent do hierarchical relationships between topics provide evidence of transfer of learning in users’ transaction data?** For example, does mastering linear equations accelerate learning of quadratic equations? To explore this question, we first asked whether prior practice and performance on sibling topics improve the prediction of a user's success when they first enter a new child topic, beyond the student’s general prior ability (`RQ1_XGBoost.ipynb`). We then investigated whether prior mastery of topic A accelerate learning in a related topic B using a Deep Knowledge Tracing (DKT) model, which topic pairs show the strongest transfer effects and whether transfer patterns differ between mathematics and German (`RQ1_DKT_training.ipynb` and `RQ1_DKT_post_analysis.ipynb`).
+
+2. RQ2 *(Ethical question)*: **Does a dropout prediction model produce unequal prediction errors across users’ gender and school track?** This ethical research question investigates whether errors from a model predicting dropout are distributed unevenly across genders and educational groups (`RQ2_ethical_analysis.ipynb`).
+
+## Notebooks Overview
+
+Since 2 complementary approaches were developed for RQ1, the project is organized into several notebooks:
+
+- `RQ1_XGBoost.ipynb` explores whether prior practice and performance on sibling topics improve the prediction of a user's success when they first enter a new child topic, beyond the student’s general prior ability. Two **multiclass XGBoost classifiers** are trained on the same target and differ only in their feature sets: a baseline model using pre-entry student general prior experience, engagement and topics seen features, and a hierarchical model that extends this baseline with sibling-history features quantifying prior exposure, engagement and accuracy on topics sharing the same parent node. The two models are compared using macro-F1 and quadratic weighted kappa (QWK), and feature importance is analyzed to identify the strongest predictors and assess the contribution of sibling-history features. Finally, based on these results, we decided to further investigate potential selection bias.
+
+- `RQ1_DKT_training.ipynb` trains a **Deep Knowledge Tracing (DKT)** model implemented as a per-user LSTM. At each timestep, the model predicts the evaluation of the student's *next* attempt (`WRONG / PARTIAL / CORRECT`) on a given skill. After training, the model is used to extract **pairwise topic-interaction signals** to quantify the strength and directionality of transfer between topic pairs.
+
+- `RQ1_DKT_post_analysis.ipynb` analyzes the results from the trained DKT model obtained after analysis.
+
+**RQ2 (ethical research question)** is investigated by the `RQ2_ethical_analysis.ipynb` notebook. It evaluates whether a dropout prediction model produces unequal prediction errors across users’ gender and school track. **[TO DO THYBAULT]**
 
 ## Setup
 
-Clone the repository:
+### 1. Clone the repository
+
 ```bash
 git clone https://github.com/idheidhwidjwod/MLBD-project.git
 cd MLBD-project
 ```
 
-Install dependencies:
+### 2. Create and activate a Conda environment
+
+We recommend using a dedicated Conda environment to avoid dependency conflicts, especially because this project is run mainly through Jupyter notebooks and uses several machine-learning libraries.
+
 ```bash
-pip install -r requirements.txt
+conda create -n mlbd-project-R3 python=3.11 -y
+conda activate mlbd-project-R3
 ```
 
 > The project targets **Python 3.11/3.12** and uses TensorFlow-macOS 2.15 with
 > Metal acceleration. On non-Apple hardware replace `tensorflow-macos` and
 > `tensorflow-metal` with the standard `tensorflow` package.
 
-## Repository Structure
+### 3. Install the required packages
 
+```bash
+pip install -r requirements.txt
 ```
+
+If Jupyter is not included in your environment, install it as follows:
+
+```bash
+pip install notebook ipykernel
+```
+
+Then register the Conda environment as a Jupyter kernel:
+
+```bash
+python -m ipykernel install --user --name mlbd-project-R3 --display-name "Python (R3 MLBD project)"
+```
+
+When opening the notebooks, select the kernel named **Python (R3 MLBD project)**.
+
+## Expected Repository Structure
+
+To run the notebooks correctly, the repository should follow the structure below.
+
+**IMPORTANT NOTE:** The data provided by Lernnavi are NOT publicly available. Therefore, the raw data files are not included when cloning the repository. Before running the notebooks, create a `data/` folder at the root of the repository and place the raw files inside it using the filenames shown below.
+
+```text
 MLBD-project/
-├── DKT_training.ipynb          # End-to-end DKT pipeline (data → model → eval)
-├── Post_Analysis.ipynb         # Pairwise topic-transfer analysis
+├── RQ1_XGBoost.ipynb           # End-to-end XGBoost pipeline
+├── RQ1_DKT_training.ipynb      # End-to-end DKT pipeline
+├── RQ1_DKT_post_analysis.ipynb # Pairwise topic-transfer analysis based on trained DKT
+├── RQ2_ethical_analysis.ipynb  # Ethical analysis of dropout prediction errors
 ├── requirements.txt
-├── data/
+├── README.md
+├── CONTEXT.md
+├── data/     # /!\ RAW LERNNAVI DATA: MUST BE ADDED MANUALLY /!\
 │   ├── documents.csv.gz        # Exercise documents (all versions)
 │   ├── topic_trees.csv.gz      # Hierarchical topic structure
 │   ├── topics_translated.csv   # English topic labels
@@ -63,7 +99,7 @@ MLBD-project/
 │       ├── postsurvey_formatted.csv
 │       ├── presurvey_questions.txt
 │       └── postsurvey_questions.txt
-├── src/
+├── src_DKT/                    # Helper scripts for the RQ1 - DKT part
 │   ├── config.py               # Global constants (e.g. MASK_VALUE)
 │   ├── data.py                 # Data loading and cleaning utilities
 │   ├── features.py             # Feature engineering and sequence building
@@ -78,31 +114,67 @@ MLBD-project/
     └── german_tuning_results.json      # German hyperparameter search results
 ```
 
-## Notebooks
+## How to Run the Notebooks
 
-### `DKT_training.ipynb`
-End-to-end pipeline: loads and cleans the five raw tables, engineers
-interaction sequences, tunes and trains a separate LSTM-based DKT model for
-each subject (`math`, `german`), and evaluates performance (AUC, balanced
-accuracy). Best weights are saved under `weights/`.
+After completing the setup and adding the required data files, launch Jupyter from the repository root:
 
-### `Post_Analysis.ipynb`
-Loads the trained models and computes **pairwise topic-transfer metrics** over
-the full dataset. For each topic pair (A, B) it measures the change in
-predicted P(correct on B) triggered by an answer to A, separately for correct
-and wrong answers. Two aggregate metrics summarise the result:
-- **strength** — overall intensity of the interaction
-- **directionality** ∈ [−1, +1] — sign indicates which topic is the
-  prerequisite (+1: B is a prerequisite of A; −1: A is a prerequisite of B)
+```bash
+jupyter notebook
+```
 
-## Data
-Data provided by Lernavi. Not publicly available — place the raw files in
-`data/` before running the notebooks (see repository structure above for the
-expected filenames).
+Or open the repository root folder and all the notebooks in Visual Studio Code.
 
-## Results
+Then run the notebooks in the following order:
 
-### Model performance (held-out test users, 20% split)
+1. `RQ1_XGBoost.ipynb`
+
+2. `RQ1_DKT_training.ipynb`
+
+3. `RQ1_DKT_post_analysis.ipynb`
+
+4. `RQ2_ethical_analysis.ipynb`
+
+
+## Key Results
+
+### RQ1 - XGBoost: Models comparison
+
+|    Model     | Macro-F1 | QWK    |
+|--------------|----------|--------|
+| Baseline     |   0.53   |  0.45  |
+| Hierarchical |   0.54   |  0.46  |
+| Difference   |   +0.01  | +0.01  |
+
+The hierarchical model slightly outperformed the baseline model, but the effect remains very weak.
+
+### RQ1 - XGBoost: Feature importance analysis on hierarchichal model
+
+Top 5 predictors in the hierarchical model:
+
+|           Feature            | Feature importance score |
+|------------------------------|--------------------------|
+| num__subject_math            |           0.145          |
+| num__prior_subject_accuracy  |           0.047          |
+| cat__child_topic_id_951.0    |           0.031          |
+| cat__child_topic_id_3112.0   |           0.028          |
+| cat__child_topic_id_2065.0   |           0.024          |
+
+Top 3 sibling-history features in the hierarchical model:
+
+|                Feature                  | Feature importance score |
+|-----------------------------------------|--------------------------|
+| num__prop_siblings_seen                 |          0.0068          |
+| num__prop_sibling_topics_entered_before |          0.0050          |
+| num__prior_sibling_accuracy_30d         |          0.0049          |
+
+Sibling-history features had very low importance compared with the strongest predictors. This suggests that sibling-topic practice provides limited additional predictive information beyond general student history and topic-specific effects.
+
+### RQ1 - XGBoost: Selection bias exploration
+
+[TO DO]
+
+
+### RQ1 - DKT: Model performance (held-out test users, 20% split)
 
 | Subject | AUC    | Accuracy | RMSE   |
 |---------|--------|----------|--------|
@@ -113,7 +185,7 @@ Both models use 256 LSTM units, no dropout, trained for 20 epochs. The 1 024-uni
 configuration reached only ~0.002 higher AUC during tuning while taking ~4× longer
 to train, so 256 units was kept for both subjects.
 
-### Transfer analysis (210 topic pairs per subject)
+### RQ1 - DKT: Transfer analysis (210 topic pairs per subject)
 
 | Metric | Math | German |
 |---|---|---|
@@ -122,7 +194,20 @@ to train, so 256 units was kept for both subjects.
 | % pairs: A is prerequisite of B | 7.1 % | 38.6 % |
 | % complementary (\|d\| < 0.1) | 55.2 % | 22.4 % |
 
+### RQ2:
+
+[TO DO THYBAULT]
+
 **Key findings:**
+
+1. RQ1 - XGBoost:
+
+- The hierarchical model produced only a very small improvement over the baseline model.
+- Sibling-history features had low feature importance compared with subject, topic, and general prior-performance features.
+- These results suggest that Lernnavi’s explicit topic hierarchy provides only weak additional predictive signal for first-entry success, at least in the current modeling setup.
+- [TO DO: ADD A PART ABOUT SELECTION BIAS INVESTIGATION]
+
+2. RQ1 - DKT:
 
 - **Coherence check built in.** A genuine prerequisite relation is asymmetric:
   answering A correctly should predict B's mastery, but not vice versa. The
@@ -140,3 +225,7 @@ to train, so 256 units was kept for both subjects.
   majority of topic pairs are complementary rather than prerequisite, which is
   consistent with a domain where many skills are practiced in parallel rather than
   sequentially.
+
+3. RQ2: 
+
+[TO DO THYBAULT]
