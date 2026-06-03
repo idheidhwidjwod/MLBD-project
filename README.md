@@ -196,40 +196,22 @@ to train, so 256 units was kept for both subjects.
 
 ### RQ2 — Fairness audit of the dropout prediction model
 
-
-
 | Attribute | OOB AUC | TPR gap | FPR gap | Equalized Odds |
-
 |-----------|---------|---------|---------|----------------|
-
 | Gender | 0.566 | 0.003 | 0.002 | ✅ Fair |
-
 | School track | 0.566 | 0.030 | 0.028 | ❌ Violated |
-
-
 
 n = 18,330 students · overall dropout rate = 47.4% · OOB accuracy = 0.556
 
-
-
 **Impossibility Result** (Chouldechova, 2017): applies for school track (base rate diff = 0.028 > 0.02, AUC > 0.5) — Demographic Parity, Equalized Odds, and Predictive Value Parity cannot all be satisfied simultaneously. Does not apply for gender (base rate diff = 0.018).
-
-
 
 **SHAP feature importance** (dropout class):
 
-
-
 | Feature | RF importance | SHAP mean \|value\| |
-
 |---------|:---:|:---:|
-
 | `avg_diff` | 0.405 | 0.0146 |
-
 | `n_tasks` | 0.335 | 0.0193 |
-
 | `avg_score` | 0.260 | 0.0089 |
-
 
 
 Top predictor by SHAP: `n_tasks` (students who attempt more exercises in week 0 are less likely to drop out). `avg_diff` ranks first by RF importance due to high variance but contributes less to individual predictions. Since `avg_diff` is set by Lernnavi's adaptive algorithm, its presence in the model raises a design concern.
