@@ -542,12 +542,16 @@ def topic_topic_interactions_by_outcome(
         long_t['mean_abs_delta_correct'] = long_t['mean_abs_delta_correct'] * r_correct
         long_t['mean_abs_delta_wrong']   = long_t['mean_abs_delta_wrong']   * r_wrong
 
-    long_t['strength'] = (
+    raw_strength = (
         long_t['mean_abs_delta_correct'] + long_t['mean_abs_delta_wrong']
     ) / 2
+    # Normalise to [0, 1] immediately; keep raw values for the directionality
+    # denominator so the ratio is unaffected by the scaling.
+    s_max = raw_strength.max()
+    long_t['strength'] = raw_strength / s_max if s_max > 0 else raw_strength
     long_t['directionality'] = (
         (long_t['mean_abs_delta_correct'] - long_t['mean_abs_delta_wrong'])
-        / long_t['strength']
+        / raw_strength
     )
 
     long_t['relation'] = [
@@ -567,8 +571,9 @@ def add_reverse_directionality(outcome_df):
         reverse_directionality — directionality of the B→A pair
         asymmetry              — directionality(A→B) - directionality(B→A)
 
-    High positive asymmetry → strongly directional prerequisite.
-    Near-zero asymmetry     → complementary / symmetric relationship.
+    Negative asymmetry (row A→B) → A is a prerequisite of B.
+    Positive asymmetry (row A→B) → B is a prerequisite of A.
+    Near-zero asymmetry          → complementary / symmetric relationship.
     """
     reverse = (
         outcome_df[['source_topic', 'target_topic', 'directionality']]
@@ -680,12 +685,33 @@ def build_curriculum_graph(prereq_df, strength_percentile=50, f_percentile=50):
     return edges_df, G
 
 
-def plot_curriculum_graph(G, subject, ax=None, figsize=(14, 7)):
+def _wrap_label(name, max_len=16):
+    """Split a label into at most two lines, breaking near the midpoint."""
+    if len(name) <= max_len:
+        return name
+    words = name.split()
+    if len(words) == 1:
+        return name
+    best_split, best_diff = 1, float('inf')
+    for i in range(1, len(words)):
+        diff = abs(len(' '.join(words[:i])) - len(' '.join(words[i:])))
+        if diff < best_diff:
+            best_diff, best_split = diff, i
+    return ' '.join(words[:best_split]) + '\n' + ' '.join(words[best_split:])
+
+
+def plot_curriculum_graph(G, subject, ax=None, figsize=(14, 7), font_size=9):
     """Draw the curriculum DAG with a left-to-right topological layout.
 
     Nodes are coloured by their topological generation (depth in the prerequisite
-    chain). Edges have uniform width; colour encodes |f| (magnitude of the
-    prerequisite directionality) so stronger prerequisite edges stand out.
+    chain). Edge colour encodes |f| (magnitude of the prerequisite score);
+    edge width encodes strength (reliability of the DKT signal, normalised [0,1]).
+
+    Parameters
+    ----------
+    font_size : int
+        Size of all text in the graph (node labels, title, annotations).
+        Increase if labels are hard to read; default 9.
     """
     try:
         import networkx as nx
@@ -717,40 +743,457 @@ def plot_curriculum_graph(G, subject, ax=None, figsize=(14, 7)):
     node_colours = [cm.Blues(0.35 + 0.55 * gen_of[n] / max(n_gens - 1, 1))
                     for n in G.nodes()]
 
-    labels = {n: G.nodes[n].get('name', str(n)) for n in G.nodes()}
+    labels = {n: _wrap_label(G.nodes[n].get('name', str(n))) for n in G.nodes()}
+
+    # Pad axis limits so labels on the leftmost/rightmost nodes are not clipped.
+    xs = [p[0] for p in pos.values()]
+    ys = [p[1] for p in pos.values()]
+    ax.set_xlim(min(xs) - 1.1, max(xs) + 1.1)
+    ax.set_ylim(min(ys) - 0.9, max(ys) + 0.9)
 
     nx.draw_networkx_nodes(G, pos, ax=ax,
                            node_color=node_colours, node_size=2200, alpha=0.9)
     nx.draw_networkx_labels(G, pos, labels=labels, ax=ax,
-                            font_size=7, font_weight='bold')
+                            font_size=font_size, font_weight='bold')
 
     if G.edges():
-        # Colour by |f| (magnitude of prerequisite directionality) — uniform width
-        # so all edges are equally visible; darker = stronger directional signal.
-        f_vals = [abs(G[u][v]['f']) for u, v in G.edges()]
-        f_norm = mcolors.Normalize(vmin=min(f_vals), vmax=max(f_vals))
+        # Colour = |f| (prerequisite score magnitude, darker = more directional).
+        # Width  = strength (normalised [0,1], thicker = more reliable signal).
+        f_vals  = [abs(G[u][v]['f'])        for u, v in G.edges()]
+        s_vals  = [G[u][v]['strength']       for u, v in G.edges()]
+        f_norm  = mcolors.Normalize(vmin=min(f_vals), vmax=max(f_vals))
         edge_colours = [cm.Oranges(0.35 + 0.65 * f_norm(f)) for f in f_vals]
+        # Map strength [0,1] → line width [1.0, 5.0]
+        edge_widths  = [1.0 + 4.0 * s for s in s_vals]
         nx.draw_networkx_edges(G, pos, ax=ax,
-                               edge_color=edge_colours, width=2.0,
+                               edge_color=edge_colours, width=edge_widths,
                                arrows=True, arrowsize=18,
                                connectionstyle='arc3,rad=0.08',
                                min_source_margin=30, min_target_margin=30)
         sm = cm.ScalarMappable(cmap=cm.Oranges, norm=f_norm)
         sm.set_array([])
-        plt.colorbar(sm, ax=ax, label='|prerequisite score f|', shrink=0.6)
+        cbar = plt.colorbar(sm, ax=ax, label='|prerequisite score f|',
+                            shrink=0.4, pad=0.01)
+        cbar.ax.tick_params(labelsize=font_size)
+        cbar.set_label('|prerequisite score f|', size=font_size)
 
     isolated = list(nx.isolates(G))
     if isolated:
         iso_names = [G.nodes[n].get('name', str(n)) for n in isolated]
         ax.annotate(f"Isolated (no strong signal): {', '.join(iso_names)}",
                     xy=(0.01, 0.01), xycoords='axes fraction',
-                    fontsize=7, color='gray', style='italic')
+                    fontsize=font_size - 1, color='gray', style='italic')
 
     ax.set_title(f'{subject} — Curriculum Graph\n'
                  f'({len(G.edges())} edges, {len(G.nodes())} topics, '
                  f'{len(isolated)} isolated)',
-                 fontsize=11, fontweight='bold')
+                 fontsize=font_size + 2, fontweight='bold')
     ax.axis('off')
+
+
+# ---------------------------------------------------------------------------
+# §8 — Skill-level prerequisite analysis
+# ---------------------------------------------------------------------------
+
+def skill_skill_interactions_by_outcome(
+    wide_pc, delta_all, source_skill_arr, source_correct,
+    skill_info, focus_topic_ids, child_to_parent,
+    min_attempts=1000, exclude_difficulty=-2,
+    before_all=None, mode='absolute', eps=0.01,
+    balance_by_outcome_ratio=False,
+):
+    """Skill-level (source_skill, target_skill) interactions split by outcome.
+
+    Analogous to topic_topic_interactions_by_outcome() but operates directly on
+    skill pairs without aggregating to topic level.  PARTIAL answers are excluded.
+
+    Qualifying skills satisfy all of:
+      - topic_id in focus_topic_ids
+      - n_attempts >= min_attempts
+      - difficulty != exclude_difficulty  (sentinel for missing estimatedDifficulty)
+
+    Returns a DataFrame.  Column naming follows the topic-level convention
+    (source_topic / target_topic = skill IDs) so add_reverse_directionality()
+    and prerequisite_score() work unchanged on the output.
+
+    Extra columns: source_skill, target_skill (same as source_topic/target_topic),
+    source_diff, target_diff, source_name, target_name,
+    source_topic_id, target_topic_id, relation.
+    """
+    if mode == 'relative':
+        if before_all is None:
+            raise ValueError("mode='relative' requires before_all from build_pairwise_deltas")
+        scale = np.ones_like(delta_all, dtype=np.float32)
+        cm = source_correct == 2
+        wm = source_correct == 0
+        scale[cm] = np.maximum(1.0 - before_all[cm], eps)
+        scale[wm] = np.maximum(before_all[wm],       eps)
+        delta_all = delta_all / scale
+    elif mode != 'absolute':
+        raise ValueError(f"unknown mode: {mode!r}")
+
+    # ── Qualifying skills ────────────────────────────────────────────────────
+    qual = skill_info[
+        skill_info['topic_id'].isin(focus_topic_ids)
+        & (skill_info['n_attempts'] >= min_attempts)
+        & (skill_info['difficulty'] != exclude_difficulty)
+    ]
+    qual_ids = np.asarray(sorted(qual['skill']))
+
+    # ── Filter source events (rows) and target skills (columns) ─────────────
+    src_mask  = np.isin(source_skill_arr, qual_ids)
+    src_ids   = source_skill_arr[src_mask]
+    src_out   = source_correct[src_mask]
+
+    skill_cols = np.asarray(wide_pc.columns)
+    col_mask   = np.isin(skill_cols, qual_ids)
+    qual_cols  = skill_cols[col_mask]
+    delta_sub  = delta_all[src_mask][:, col_mask]
+
+    # ── Per-outcome aggregation ──────────────────────────────────────────────
+    df_s = pd.DataFrame(delta_sub, columns=qual_cols)
+    df_s['source']  = src_ids
+    df_s['outcome'] = src_out
+
+    def _agg(outcome_code, suffix):
+        sub = df_s[df_s['outcome'] == outcome_code].drop(columns='outcome')
+        g   = sub.groupby('source')
+        mean_l = g.mean().stack(dropna=False).rename(f'mean_abs_delta_{suffix}')
+        n_obs  = g.size().rename(f'n_obs_{suffix}')
+        r = mean_l.reset_index()
+        r.columns = ['source_skill', 'target_skill', f'mean_abs_delta_{suffix}']
+        r[f'n_obs_{suffix}'] = r['source_skill'].map(n_obs)
+        return r[r['source_skill'] != r['target_skill']].dropna(
+            subset=[f'mean_abs_delta_{suffix}'])
+
+    long = _agg(2, 'correct').merge(
+        _agg(0, 'wrong'), on=['source_skill', 'target_skill'], how='outer')
+
+    if balance_by_outcome_ratio:
+        total = long['n_obs_correct'].fillna(0) + long['n_obs_wrong'].fillna(0)
+        long['mean_abs_delta_correct'] *= long['n_obs_correct'].fillna(0) / total
+        long['mean_abs_delta_wrong']   *= long['n_obs_wrong'].fillna(0)   / total
+
+    raw_strength = (
+        long['mean_abs_delta_correct'] + long['mean_abs_delta_wrong']
+    ) / 2
+    s_max = raw_strength.max()
+    long['strength'] = raw_strength / s_max if s_max > 0 else raw_strength
+    long['directionality'] = (
+        (long['mean_abs_delta_correct'] - long['mean_abs_delta_wrong'])
+        / raw_strength
+    )
+
+    # ── Attach metadata ──────────────────────────────────────────────────────
+    meta = qual.set_index('skill')[['topic_id', 'topic_name', 'difficulty']]
+    for col, pfx in [('source_skill', 'source'), ('target_skill', 'target')]:
+        long[f'{pfx}_diff']     = long[col].map(meta['difficulty'])
+        long[f'{pfx}_name']     = long[col].map(meta['topic_name'])
+        long[f'{pfx}_topic_id'] = long[col].map(meta['topic_id'])
+
+    long['relation'] = [
+        skill_relation(a, b, child_to_parent)
+        for a, b in zip(long['source_topic_id'], long['target_topic_id'])
+    ]
+
+    # Alias to topic-level API so add_reverse_directionality() /
+    # prerequisite_score() work unchanged.
+    long['source_topic'] = long['source_skill']
+    long['target_topic'] = long['target_skill']
+
+    return long.reset_index(drop=True)
+
+
+def build_skill_curriculum_graph(prereq_skill_df, skill_info,
+                                  strength_percentile=50, f_percentile=50):
+    """Build a skill-level curriculum DAG from prerequisite scores.
+
+    Analogous to build_curriculum_graph() but nodes are skill IDs
+    (topic × difficulty band).  Adds node attributes: name, topic_id,
+    topic_name, difficulty — consumed by plot_skill_curriculum_html().
+
+    prereq_skill_df must be the output of prerequisite_score() applied to
+    skill_skill_interactions_by_outcome(), with columns:
+      source_topic (= source skill ID), target_topic (= target skill ID),
+      prerequisite_score, strength, source_name, target_name,
+      source_diff, target_diff, source_topic_id, target_topic_id.
+
+    Returns
+    -------
+    edges_df : DataFrame of accepted edges
+    G        : networkx.DiGraph — nodes are skill IDs
+    """
+    try:
+        import networkx as nx
+    except ImportError:
+        raise ImportError("networkx is required: pip install networkx")
+
+    df = prereq_skill_df.dropna(subset=['prerequisite_score', 'strength']).copy()
+    df = df[df['prerequisite_score'] > 0]
+
+    strength_floor = df['strength'].quantile(strength_percentile / 100)
+    df = df[df['strength'] >= strength_floor]
+
+    f_cutoff = df['prerequisite_score'].quantile(f_percentile / 100)
+    df = df[df['prerequisite_score'] >= f_cutoff]
+
+    df = df.sort_values('prerequisite_score', ascending=False).reset_index(drop=True)
+
+    all_skills = set(df['source_topic']).union(df['target_topic'])
+    G = nx.DiGraph()
+    G.add_nodes_from(all_skills)
+
+    meta = skill_info.set_index('skill')[['topic_id', 'topic_name', 'difficulty']]
+    for sid in all_skills:
+        if sid in meta.index:
+            row = meta.loc[sid]
+            G.nodes[sid].update({
+                'topic_id':   int(row['topic_id']),
+                'topic_name': str(row['topic_name']),
+                'difficulty': int(row['difficulty']),
+                'name':       f"{row['topic_name']} (d={int(row['difficulty'])})",
+            })
+
+    accepted = []
+    for _, row in df.iterrows():
+        u, v = row['source_topic'], row['target_topic']
+        if not nx.has_path(G, v, u):
+            G.add_edge(u, v, f=row['prerequisite_score'], strength=row['strength'])
+            accepted.append(row)
+
+    keep_cols = [c for c in [
+        'source_topic', 'target_topic', 'source_name', 'target_name',
+        'source_diff', 'target_diff', 'prerequisite_score', 'strength', 'relation',
+    ] if c in df.columns]
+    edges_df = (pd.DataFrame(accepted)[keep_cols].reset_index(drop=True)
+                if accepted else pd.DataFrame(columns=keep_cols))
+    return edges_df, G
+
+
+def plot_skill_curriculum_html(G, subject, topic_order, output_path,
+                                x_spacing=220, y_spacing=130):
+    """Generate a standalone interactive HTML file for the skill curriculum graph.
+
+    Layout: x-axis = topic curriculum order (from §7), y-axis = difficulty band.
+    Nodes share a colour per topic so same-topic skills are visually grouped.
+    Clicking a node highlights all its ancestors (blue = must learn first) and
+    descendants (green = unlocked after).  Click again or background to reset.
+
+    Uses vis.js loaded from CDN — no extra Python dependencies needed.
+
+    Parameters
+    ----------
+    G            : DiGraph from build_skill_curriculum_graph()
+    subject      : str — used in the page title
+    topic_order  : dict[topic_id → int] — 0-based column index per topic.
+                   Derive from the §7 topological sort:
+                       order = list(nx.topological_sort(curriculum_graphs[subject]))
+                       topic_order = {tid: i for i, tid in enumerate(order)}
+    output_path  : str or Path — HTML file destination
+    x_spacing    : horizontal gap between topic columns (vis.js units, default 220)
+    y_spacing    : vertical gap between difficulty rows  (vis.js units, default 130)
+
+    Returns
+    -------
+    pathlib.Path to the saved HTML file.
+    """
+    import json as _json
+    import pathlib as _pathlib
+
+    output_path = _pathlib.Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # ── One colour per topic (categorical palette, up to 15 topics) ──────────
+    topic_ids = sorted({G.nodes[n].get('topic_id', 0) for n in G.nodes()})
+    _palette = [
+        '#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f',
+        '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ac',
+        '#499894', '#86bcb6', '#d4a6c8', '#ffbe7d', '#b07aa1',
+    ]
+    topic_color = {tid: _palette[i % len(_palette)] for i, tid in enumerate(topic_ids)}
+
+    # ── vis.js node list ──────────────────────────────────────────────────────
+    # x = topic column * x_spacing  (left = early prerequisite, right = later)
+    # y = (4 - difficulty) * y_spacing  (d=4 at top / y≈0, d=1 at bottom)
+    nodes_list = []
+    for n in G.nodes():
+        nd      = G.nodes[n]
+        tid     = nd.get('topic_id', 0)
+        diff    = nd.get('difficulty', 1)
+        label   = nd.get('name', str(n))
+        color   = topic_color.get(tid, '#888888')
+        nodes_list.append({
+            'id':    int(n),
+            'label': label,
+            'x':     topic_order.get(tid, 0) * x_spacing,
+            'y':     (4 - diff) * y_spacing,
+            'color': {'background': color, 'border': color},
+            'font':  {'color': '#ffffff', 'size': 11},
+            'shape': 'box',
+            'title': f"<b>{label}</b><br>skill_id: {n} | topic_id: {tid}",
+        })
+
+    # ── vis.js edge list ──────────────────────────────────────────────────────
+    edges_list = []
+    for u, v, data in G.edges(data=True):
+        f_val = float(data.get('f', 0.5))
+        edges_list.append({
+            'from':  int(u),
+            'to':    int(v),
+            'title': f"f = {f_val:.3f}",
+            'color': {'color': '#aaaaaa', 'opacity': 0.85},
+        })
+
+    nodes_json = _json.dumps(nodes_list)
+    edges_json = _json.dumps(edges_list)
+    n_nodes = len(G.nodes())
+    n_edges = len(G.edges())
+
+    # ── JavaScript: uses placeholder strings to avoid f-string brace escaping ─
+    _js = (
+        "const NODES_DATA = __NODES__;\n"
+        "const EDGES_DATA = __EDGES__;\n"
+        "\n"
+        "// Forward (adj) and backward (radj) adjacency for BFS path-finding.\n"
+        "const adj = {}, radj = {};\n"
+        "NODES_DATA.forEach(n => { adj[n.id] = []; radj[n.id] = []; });\n"
+        "EDGES_DATA.forEach(e => { adj[e.from].push(e.to); radj[e.to].push(e.from); });\n"
+        "\n"
+        "function bfs(startId, graph) {\n"
+        "  const visited = new Set([startId]);\n"
+        "  const queue = [startId];\n"
+        "  while (queue.length) {\n"
+        "    const cur = queue.shift();\n"
+        "    (graph[cur] || []).forEach(nb => {\n"
+        "      if (!visited.has(nb)) { visited.add(nb); queue.push(nb); }\n"
+        "    });\n"
+        "  }\n"
+        "  return visited;\n"
+        "}\n"
+        "\n"
+        "const nodes = new vis.DataSet(\n"
+        "  NODES_DATA.map(n => ({ ...n, fixed: { x: true, y: true } }))\n"
+        ");\n"
+        "const edges = new vis.DataSet(\n"
+        "  EDGES_DATA.map((e, i) => ({\n"
+        "    ...e, id: i,\n"
+        "    arrows: { to: { enabled: true, scaleFactor: 0.8 } },\n"
+        "    smooth: { type: 'curvedCW', roundness: 0.15 },\n"
+        "    width: 1.5,\n"
+        "  }))\n"
+        ");\n"
+        "\n"
+        "const network = new vis.Network(\n"
+        "  document.getElementById('network'),\n"
+        "  { nodes, edges },\n"
+        "  {\n"
+        "    physics: false,\n"
+        "    interaction: { hover: true, tooltipDelay: 200 },\n"
+        "    edges: { selectionWidth: 0 },\n"
+        "    nodes: { borderWidth: 1.5 },\n"
+        "  }\n"
+        ");\n"
+        "\n"
+        "const DEFAULT_COLORS = {};\n"
+        "NODES_DATA.forEach(n => { DEFAULT_COLORS[n.id] = n.color; });\n"
+        "let activeNode = null;\n"
+        "\n"
+        "network.on('click', function(params) {\n"
+        "  if (params.nodes.length > 0) {\n"
+        "    const nid = params.nodes[0];\n"
+        "    if (activeNode === nid) { resetAll(); activeNode = null; return; }\n"
+        "    activeNode = nid;\n"
+        "    const ancestors   = bfs(nid, radj);\n"
+        "    const descendants = bfs(nid, adj);\n"
+        "    const highlighted = new Set([...ancestors, ...descendants]);\n"
+        "    nodes.update(NODES_DATA.map(function(n) {\n"
+        "      if (n.id === nid)\n"
+        "        return { id: n.id, color: { background: '#e74c3c', border: '#c0392b' }, opacity: 1.0 };\n"
+        "      if (ancestors.has(n.id))\n"
+        "        return { id: n.id, color: { background: '#3498db', border: '#2980b9' }, opacity: 1.0 };\n"
+        "      if (descendants.has(n.id))\n"
+        "        return { id: n.id, color: { background: '#2ecc71', border: '#27ae60' }, opacity: 1.0 };\n"
+        "      return { id: n.id, color: { background: '#3a3a4a', border: '#55556a' }, opacity: 0.25 };\n"
+        "    }));\n"
+        "    edges.update(EDGES_DATA.map(function(e, i) {\n"
+        "      const active = highlighted.has(e.from) && highlighted.has(e.to);\n"
+        "      return {\n"
+        "        id: i,\n"
+        "        color: { color: active ? '#ffffff' : '#333344', opacity: active ? 1.0 : 0.08 },\n"
+        "        width: active ? 2.5 : 1.0,\n"
+        "      };\n"
+        "    }));\n"
+        "  } else {\n"
+        "    resetAll();\n"
+        "    activeNode = null;\n"
+        "  }\n"
+        "});\n"
+        "\n"
+        "function resetAll() {\n"
+        "  nodes.update(NODES_DATA.map(function(n) {\n"
+        "    return { id: n.id, color: DEFAULT_COLORS[n.id], opacity: 1.0 };\n"
+        "  }));\n"
+        "  edges.update(EDGES_DATA.map(function(e, i) {\n"
+        "    return { id: i, color: { color: '#aaaaaa', opacity: 0.85 }, width: 1.5 };\n"
+        "  }));\n"
+        "}\n"
+    ).replace('__NODES__', nodes_json).replace('__EDGES__', edges_json)
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{subject} — Skill Curriculum Graph</title>
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{ background: #1e1e2e; font-family: 'Segoe UI', Arial, sans-serif; overflow: hidden; }}
+    #network {{ width: 100vw; height: 100vh; }}
+    #info {{
+      position: absolute; top: 12px; left: 12px; z-index: 10;
+      color: #cdd6f4; background: rgba(30,30,46,0.92);
+      padding: 10px 14px; border-radius: 8px;
+      border: 1px solid #45475a; font-size: 13px; line-height: 1.7;
+      pointer-events: none;
+    }}
+    #legend {{
+      position: absolute; bottom: 12px; right: 12px; z-index: 10;
+      color: #cdd6f4; background: rgba(30,30,46,0.92);
+      padding: 10px 14px; border-radius: 8px;
+      border: 1px solid #45475a; font-size: 11px; line-height: 1.8;
+      pointer-events: none;
+    }}
+    .dot {{
+      display: inline-block; width: 10px; height: 10px;
+      border-radius: 2px; margin-right: 5px; vertical-align: middle;
+    }}
+  </style>
+</head>
+<body>
+<div id="info">
+  <b>{subject} &mdash; Skill Curriculum Graph</b><br>
+  {n_nodes} skills &middot; {n_edges} prerequisite edges<br>
+  <span style="color:#a6adc8; font-size:11px">
+    Click a node to highlight its full prerequisite chain.<br>
+    Click again or background to reset.
+  </span>
+</div>
+<div id="network"></div>
+<div id="legend">
+  <div><span class="dot" style="background:#3498db"></span>Ancestors &mdash; must learn first</div>
+  <div><span class="dot" style="background:#e74c3c"></span>Selected skill</div>
+  <div><span class="dot" style="background:#2ecc71"></span>Descendants &mdash; unlocked after</div>
+  <br>
+  <span style="color:#a6adc8">Node colour = topic &nbsp;&middot;&nbsp; Row = difficulty (d=1 bottom, d=4 top)</span>
+</div>
+<script>
+{_js}
+</script>
+</body>
+</html>"""
+
+    output_path.write_text(html, encoding='utf-8')
+    return output_path
 
 
 def annotate_skill_interactions(long, skill_info, child_to_parent, focus_topic_ids=None):
