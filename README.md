@@ -134,10 +134,12 @@ Then run the notebooks in the following order:
 
 4. `RQ2_ethical_analysis.ipynb`
 
+The cells of each notebook must be run in order, and cells should not be re-run independently (in order to avoid silent errors).
+
 
 ## Key Results
 
-### RQ1 - XGBoost: Models comparison
+### **RQ1 - XGBoost:** Models comparison
 
 |    Model     | Macro-F1 | QWK    |
 |--------------|----------|--------|
@@ -147,7 +149,7 @@ Then run the notebooks in the following order:
 
 The hierarchical model slightly outperformed the baseline model, but the effect remains very weak.
 
-### RQ1 - XGBoost: Feature importance analysis on hierarchichal model
+### **RQ1 - XGBoost:** Feature importance analysis on hierarchichal model
 
 Top 5 predictors in the hierarchical model:
 
@@ -169,12 +171,12 @@ Top 3 sibling-history features in the hierarchical model:
 
 Sibling-history features had very low importance compared with the strongest predictors. This suggests that sibling-topic practice provides limited additional predictive information beyond general student history and topic-specific effects.
 
-### RQ1 - XGBoost: Selection bias exploration
+### **RQ1 - XGBoost:** Selection bias exploration
 
 [TO DO]
 
 
-### RQ1 - DKT: Model performance (held-out test users, 20% split)
+### **RQ1 - DKT:** Model performance (held-out test users, 20% split)
 
 | Subject | AUC    | Accuracy | RMSE   |
 |---------|--------|----------|--------|
@@ -185,7 +187,7 @@ Both models use 256 LSTM units, no dropout, trained for 20 epochs. The 1 024-uni
 configuration reached only ~0.002 higher AUC during tuning while taking ~4× longer
 to train, so 256 units was kept for both subjects.
 
-### RQ1 - DKT: Transfer analysis (210 topic pairs per subject)
+### **RQ1 - DKT:** Transfer analysis (210 topic pairs per subject)
 
 | Metric | Math | German |
 |---|---|---|
@@ -194,7 +196,7 @@ to train, so 256 units was kept for both subjects.
 | % pairs: A is prerequisite of B | 7.1 % | 38.6 % |
 | % complementary (\|d\| < 0.1) | 55.2 % | 22.4 % |
 
-### RQ2 — Fairness audit of the dropout prediction model
+### **RQ2:** Fairness audit of the dropout prediction model
 
 | Attribute | OOB AUC | TPR gap | FPR gap | Equalized Odds |
 |-----------|---------|---------|---------|----------------|
@@ -218,14 +220,14 @@ Top predictor by SHAP: `n_tasks` (students who attempt more exercises in week 0 
 
 **Key findings:**
 
-1. RQ1 - XGBoost:
+1. **RQ1 - XGBoost:**
 
 - The hierarchical model produced only a very small improvement over the baseline model.
 - Sibling-history features had low feature importance compared with subject, topic, and general prior-performance features.
 - These results suggest that Lernnavi’s explicit topic hierarchy provides only weak additional predictive signal for first-entry success, at least in the current modeling setup.
 - [TO DO: ADD A PART ABOUT SELECTION BIAS INVESTIGATION]
 
-2. RQ1 - DKT:
+2. **RQ1 - DKT:**
 
 - **Coherence check built in.** A genuine prerequisite relation is asymmetric:
   answering A correctly should predict B's mastery, but not vice versa. The
@@ -244,7 +246,7 @@ Top predictor by SHAP: `n_tasks` (students who attempt more exercises in week 0 
   consistent with a domain where many skills are practiced in parallel rather than
   sequentially.
 
-3. RQ2:
+3. **RQ2:**
 
 - The model is **fair across gender**: TPR gap = 0.003, FPR gap = 0.002 — errors are symmetric between female and male students.
 
