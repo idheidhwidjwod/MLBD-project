@@ -12,7 +12,7 @@ This project was conducted as part of the Machine Learning for Behavioral Data (
 
 This project investigate 2 separate research questions:
 
-1. RQ1: **To what extent do hierarchical relationships between topics provide evidence of transfer of learning in users’ transaction data?** For example, does mastering linear equations accelerate learning of quadratic equations? To explore this question, we first asked whether prior practice and performance on sibling topics improve the prediction of a user's success when they first enter a new child topic, beyond the student’s general prior ability (`RQ1_XGBoost.ipynb`). We then investigated whether prior mastery of topic A accelerate learning in a related topic B using a Deep Knowledge Tracing (DKT) model, which topic pairs show the strongest transfer effects and whether transfer patterns differ between mathematics and German (`RQ1_DKT_training.ipynb` and `RQ1_DKT_post_analysis.ipynb`).
+1. RQ1: **To what extent do hierarchical relationships between topics provide evidence of transfer of learning in users’ transaction data?** For example, does mastering linear equations accelerate learning of quadratic equations? To explore this question, we first asked whether prior practice and performance on sibling topics improve the prediction of a user's success when they first enter a new child topic, beyond the student’s general prior ability (`RQ1_XGBoost.ipynb`). We then investigated whether prior mastery of topic A accelerates learning in a related topic B using a Deep Knowledge Tracing (DKT) model, which topic pairs show the strongest transfer effects and whether transfer patterns differ between mathematics and German (`RQ1_DKT_training.ipynb` and `RQ1_DKT_post_analysis.ipynb`).
 
 2. RQ2 *(Ethical question)*: **Does a dropout prediction model produce unequal prediction errors across users’ gender and school track?** This ethical research question investigates whether errors from a model predicting dropout are distributed unevenly across genders and educational groups (`RQ2_ethical_analysis.ipynb`).
 
@@ -20,7 +20,7 @@ This project investigate 2 separate research questions:
 
 Since 2 complementary approaches were developed for RQ1, the project is organized into several notebooks:
 
-- `RQ1_XGBoost.ipynb` explores whether prior practice and performance on sibling topics improve the prediction of a user's success when they first enter a new child topic, beyond the student’s general prior ability. Two **multiclass XGBoost classifiers** are trained on the same target and differ only in their feature sets: a baseline model using pre-entry student general prior experience, engagement and topics seen features, and a hierarchical model that extends this baseline with sibling-history features quantifying prior exposure, engagement and accuracy on topics sharing the same parent node. The two models are compared using macro-F1 and quadratic weighted kappa (QWK), and feature importance is analyzed to identify the strongest predictors and assess the contribution of sibling-history features. Finally, based on these results, we decided to further investigate potential selection bias.
+- `RQ1_XGBoost.ipynb` explores whether prior practice and performance on sibling topics improve the prediction of a user's early success when they first enter a new child topic, beyond the student’s general prior experience, engagement, prior accuracy and topic history. One entry event per `(user_id, child_topic_id)` pair is defined using the first 3 eligible `CORRECT`/`WRONG` attempts on the child topic. Two **multiclass XGBoost classifiers** are trained on the same target and are compared: a baseline model using pre-entry student general prior experience, engagement and topics seen features, and a "hierarchical" model that extends this baseline with sibling-history features capturing prior exposure, recency and accuracy on topics sharing the same parent node. The two models are evaluated with macro-F1 and quadratic weighted kappa (QWK) mainly, and feature importance is used to identify the strongest predictors and assess the contribution of sibling-history features. Finally, potential selection bias were investigated to interpret the results.
 
 - `RQ1_DKT_training.ipynb` trains a **Deep Knowledge Tracing (DKT)** model implemented as a per-user LSTM. At each timestep, the model predicts the evaluation of the student's *next* attempt (`WRONG / PARTIAL / CORRECT`) on a given skill. After training, the model is used to extract **pairwise topic-interaction signals** to quantify the strength and directionality of transfer between topic pairs.
 
@@ -141,39 +141,43 @@ The cells of each notebook must be run in order, and cells should not be re-run 
 
 ### **RQ1 - XGBoost:** Models comparison
 
-|    Model     | Macro-F1 | QWK    |
-|--------------|----------|--------|
-| Baseline     |   0.53   |  0.45  |
-| Hierarchical |   0.54   |  0.46  |
-| Difference   |   +0.01  | +0.01  |
+Mean metrics across seeds:
 
-The hierarchical model slightly outperformed the baseline model, but the effect remains very weak.
+|    Model     | Macro-F1  |  QWK    |
+|--------------|-----------|---------|
+| Baseline     |   0.512   |  0.419  |
+| Hierarchical |   0.516   |  0.422  |
+| Difference   |   +0.004  | +0.003  |
 
-### **RQ1 - XGBoost:** Feature importance analysis on hierarchichal model
+The hierarchical model slightly outperforms the baseline model across seeds, but the improvement is very small. This suggests that sibling-topic history contains some additional predictive signal, but the effect is weak.
+
+### **RQ1 - XGBoost:** Feature importance analysis on hierarchical model
 
 Top 5 predictors in the hierarchical model:
 
-|           Feature            | Feature importance score |
-|------------------------------|--------------------------|
-| num__subject_math            |           0.145          |
-| num__prior_subject_accuracy  |           0.047          |
-| cat__child_topic_id_951.0    |           0.031          |
-| cat__child_topic_id_3112.0   |           0.028          |
-| cat__child_topic_id_2065.0   |           0.024          |
+| Feature | Feature importance score |
+|---|---:|
+| `num__subject_math` | 0.3129 |
+| `cat__child_topic_id_951.0` | 0.0375 |
+| `cat__child_topic_id_3110.0` | 0.0311 |
+| `cat__child_topic_id_3113.0` | 0.0287 |
+| `cat__child_topic_id_3112.0` | 0.0279 |
 
-Top 3 sibling-history features in the hierarchical model:
+Top 3 sibling-history features:
 
-|                Feature                  | Feature importance score |
-|-----------------------------------------|--------------------------|
-| num__prop_siblings_seen                 |          0.0068          |
-| num__prop_sibling_topics_entered_before |          0.0050          |
-| num__prior_sibling_accuracy_30d         |          0.0049          |
+| Feature | Feature importance score |
+|---|---:|
+| `num__prior_sibling_accuracy` | 0.0044 |
+| `num__prop_sibling_topics_entered_before` | 0.0040 |
+| `num__is_first_topic_in_sibling_group` | 0.0039 |
 
-Sibling-history features had very low importance compared with the strongest predictors. This suggests that sibling-topic practice provides limited additional predictive information beyond general student history and topic-specific effects.
+Sibling-history features have very low importance compared with subject and topic-identity features. This suggests that sibling-topic practice provides only limited additional predictive information beyond general student history and topic-specific effects.
 
-### **RQ1 - XGBoost:** Selection bias exploration
+### **RQ1 - XGBoost:** Selection-bias exploration
 
-[TO DO]
+The notebook also investigates whether students with prior sibling-topic history are comparable to students entering a topic directly. Prepared-entry and direct-entry users differ strongly in prior activity, prior topic exposure, and prior accuracy. Standardized mean differences are especially large for `prior_subject_accuracy` and `prior_global_accuracy`, indicating substantial imbalance between the two groups.
+
+This means sibling-history exposure is not random: it partly reflects user engagement, prior ability, and topic-routing patterns. Therefore, the XGBoost results should be interpreted as predictive evidence, not as causal proof that practicing sibling topics improves early success.
 
 
 ### **RQ1 - DKT:** Model performance (held-out test users, 20% split)
@@ -222,10 +226,11 @@ Top predictor by SHAP: `n_tasks` (students who attempt more exercises in week 0 
 
 1. **RQ1 - XGBoost:**
 
-- The hierarchical model produced only a very small improvement over the baseline model.
-- Sibling-history features had low feature importance compared with subject, topic, and general prior-performance features.
-- These results suggest that Lernnavi’s explicit topic hierarchy provides only weak additional predictive signal for first-entry success, at least in the current modeling setup.
-- [TO DO: ADD A PART ABOUT SELECTION BIAS INVESTIGATION]
+- The hierarchical model produces a small but consistent improvement over the baseline model.
+- The effect remains weak: mean macro-F1 improves by about +0.004 and mean QWK by about +0.003.
+- Feature importance is dominated by subject and child-topic identity.
+- Sibling-history features have very low importance, suggesting limited additional predictive value.
+- Selection-bias diagnostics show that students with sibling history are already different from direct-entry students, so the results should not be interpreted causally.
 
 2. **RQ1 - DKT:**
 
