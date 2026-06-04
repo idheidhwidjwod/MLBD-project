@@ -12,7 +12,7 @@ This project was conducted as part of the Machine Learning for Behavioral Data (
 
 This project investigate 2 separate research questions:
 
-1. RQ1: **To what extent do hierarchical relationships between topics provide evidence of transfer of learning in users’ transaction data?** For example, does mastering linear equations accelerate learning of quadratic equations? To explore this question, we first asked whether prior practice and performance on sibling topics improve the prediction of a user’s success when they first enter a new child topic, beyond the student’s general prior ability (`notebook1.ipynb`). We then investigated whether prior mastery of topic A accelerates learning in a related topic B using a Deep Knowledge Tracing (DKT) model, which topic pairs show the strongest transfer effects and whether transfer patterns differ between mathematics and German (`DKT_training.ipynb` and `Post_Analysis.ipynb`).
+1. RQ1: **To what extent do hierarchical relationships between topics provide evidence of transfer of learning in users’ transaction data?** For example, does mastering linear equations accelerate learning of quadratic equations? To explore this question, we first asked whether prior practice and performance on sibling topics improve the prediction of a user’s success when they first enter a new child topic, beyond the student’s general prior ability (`RQ1_XGBoost.ipynb`). We then investigated whether prior mastery of topic A accelerates learning in a related topic B using a Deep Knowledge Tracing (DKT) model, which topic pairs show the strongest transfer effects and whether transfer patterns differ between mathematics and German (`RQ1_DKT_training.ipynb` and `RQ1_DKT_post_analysis.ipynb`).
 
 2. RQ2 *(Ethical question)*: **Does a dropout prediction model produce unequal prediction errors across users’ gender and school track?** This ethical research question investigates whether errors from a model predicting dropout are distributed unevenly across genders and educational groups (`RQ2_ethical_analysis.ipynb`).
 
@@ -20,11 +20,11 @@ This project investigate 2 separate research questions:
 
 Since 2 complementary approaches were developed for RQ1, the project is organized into several notebooks:
 
-- `notebook1.ipynb` explores whether prior practice and performance on sibling topics improve the prediction of a user’s early success when they first enter a new child topic, beyond the student’s general prior experience, engagement, prior accuracy and topic history. One entry event per `(user_id, child_topic_id)` pair is defined using the first 3 eligible `CORRECT`/`WRONG` attempts on the child topic. Two **multiclass XGBoost classifiers** are trained on the same target and are compared: a baseline model using pre-entry student general prior experience, engagement and topics seen features, and a "hierarchical" model that extends this baseline with sibling-history features capturing prior exposure, recency and accuracy on topics sharing the same parent node. The two models are evaluated with macro-F1 and quadratic weighted kappa (QWK) mainly, and feature importance is used to identify the strongest predictors and assess the contribution of sibling-history features. Finally, potential selection bias were investigated to interpret the results.
+- `RQ1_XGBoost.ipynb` explores whether prior practice and performance on sibling topics improve the prediction of a user’s early success when they first enter a new child topic, beyond the student’s general prior experience, engagement, prior accuracy and topic history. One entry event per `(user_id, child_topic_id)` pair is defined using the first 3 eligible `CORRECT`/`WRONG` attempts on the child topic. Two **multiclass XGBoost classifiers** are trained on the same target and are compared: a baseline model using pre-entry student general prior experience, engagement and topics seen features, and a "hierarchical" model that extends this baseline with sibling-history features capturing prior exposure, recency and accuracy on topics sharing the same parent node. The two models are evaluated with macro-F1 and quadratic weighted kappa (QWK) mainly, and feature importance is used to identify the strongest predictors and assess the contribution of sibling-history features. Finally, potential selection bias were investigated to interpret the results.
 
-- `DKT_training.ipynb` trains a **Deep Knowledge Tracing (DKT)** model implemented as a per-user LSTM. At each timestep, the model predicts the evaluation of the student's *next* attempt (`WRONG / PARTIAL / CORRECT`) on a given skill. Before modeling, the topic tree undergoes targeted surgery: three misplaced German root topics (`2026`, `2027`, `2028`) are reparented under the correct German root, empty-descendant topics are pruned, and two junk subtrees (`2029 — Verschiedenes`, `3425 — Zu löschen`) are dropped outright. After training, the model is used to extract **pairwise topic-interaction signals** to quantify the strength and directionality of transfer between topic pairs.
+- `RQ1_DKT_training.ipynb` trains a **Deep Knowledge Tracing (DKT)** model implemented as a per-user LSTM. At each timestep, the model predicts the evaluation of the student's *next* attempt (`WRONG / PARTIAL / CORRECT`) on a given skill. Before modeling, the topic tree undergoes targeted surgery: three misplaced German root topics (`2026`, `2027`, `2028`) are reparented under the correct German root, empty-descendant topics are pruned, and two junk subtrees (`2029 — Verschiedenes`, `3425 — Zu löschen`) are dropped outright. After training, the model is used to extract **pairwise topic-interaction signals** to quantify the strength and directionality of transfer between topic pairs.
 
-- `Post_Analysis.ipynb` analyzes the results from the trained DKT model. For each subject it produces four views of the pairwise topic interactions (top pairs by directionality, coherence scatter, prerequisite bar chart, and a 3D strength/directionality plot). A cross-subject comparison (§5) aggregates statistics and distributions across math and German. A prerequisite score (§6) collapses the two directed directionality values per unordered pair into a single signed asymmetry scalar, used to rank which topic acts as prerequisite.
+- `RQ1_DKT_post_analysis.ipynb` analyzes the results from the trained DKT model. For each subject it produces four views of the pairwise topic interactions (top pairs by directionality, coherence scatter, prerequisite bar chart, and a 3D strength/directionality plot). A cross-subject comparison (§5) aggregates statistics and distributions across math and German. A prerequisite score (§6) collapses the two directed directionality values per unordered pair into a single signed asymmetry scalar, used to rank which topic acts as prerequisite.
 
 **RQ2 (ethical research question)** is investigated by the `RQ2_ethical_analysis.ipynb` notebook. It evaluates whether a dropout prediction model produces unequal prediction errors across users' gender and school track. A **Random Forest classifier** is trained on three week-0 behavioural features (`n_tasks`, `avg_score`, `avg_diff`) to predict whether a student will leave the platform before week 3. Fairness is evaluated across gender and school track (Gymnasium vs. Vocational) using Demographic Parity (chi-square, Cramér's V), Equalized Odds (TPR/FPR gaps with Wilson confidence intervals), the Impossibility Result (Chouldechova, 2017), and **TreeSHAP** explainability to identify which features drive the model's predictions.
 
@@ -78,27 +78,18 @@ To run the notebooks correctly, the repository should follow the structure below
 
 ```text
 MLBD-project/
-├── notebook1.ipynb             # End-to-end XGBoost pipeline
-├── DKT_training.ipynb          # End-to-end DKT pipeline
-├── Post_Analysis.ipynb         # Pairwise topic-transfer analysis based on trained DKT
-├── ethical_analysis.ipynb      # Ethical analysis of dropout prediction errors
+├── RQ1_XGBoost.ipynb             # End-to-end XGBoost pipeline
+├── RQ1_DKT_training.ipynb          # End-to-end DKT pipeline
+├── RQ1_DKT_post_analysis.ipynb         # Pairwise topic-transfer analysis based on trained DKT
+├── RQ2_ethical_analysis.ipynb      # Ethical analysis of dropout prediction errors
 ├── requirements.txt
 ├── README.md
-├── CONTEXT.md
 ├── data/     # /!\ RAW LERNNAVI DATA: MUST BE ADDED MANUALLY /!\
 │   ├── documents.csv.gz        # Exercise documents (all versions)
 │   ├── topic_trees.csv.gz      # Hierarchical topic structure
 │   ├── topics_translated.csv   # English topic labels
 │   ├── transactions.csv.gz     # Student interaction log
 │   ├── users.csv.gz            # User metadata
-│   └── study/                  # Study-specific data subset
-│       ├── events.csv.gz
-│       ├── transactions.csv.gz
-│       ├── math_prepost_test.csv
-│       ├── presurvey_formatted.csv
-│       ├── postsurvey_formatted.csv
-│       ├── presurvey_questions.txt
-│       └── postsurvey_questions.txt
 ├── src/                        # Helper scripts for the RQ1 - DKT part
 │   ├── config.py               # Global constants (e.g. MASK_VALUE)
 │   ├── data.py                 # Data loading and cleaning utilities
@@ -112,6 +103,9 @@ MLBD-project/
     ├── math_tuning_results.json        # Math hyperparameter search results
     ├── german_bestmodel.weights.h5     # Best German DKT checkpoint
     └── german_tuning_results.json      # German hyperparameter search results
+└── DKT - prerequisites networks/ # We stored the obtained prerequisites networks obtained in the DKT study here, if you are curious to explore more in depth
+    ├── skill_curriculum_german.html 
+    ├── skill_curriculum_math.html
 ```
 
 ## How to Run the Notebooks
@@ -126,13 +120,13 @@ Or open the repository root folder and all the notebooks in Visual Studio Code.
 
 Then run the notebooks in the following order:
 
-1. `notebook1.ipynb`
+1. `RQ1_XGBoost.ipynb`
 
-2. `DKT_training.ipynb`
+2. `RQ1_DKT_training.ipynb`
 
-3. `Post_Analysis.ipynb`
+3. `RQ1_DKT_post_analysis.ipynb`
 
-4. `ethical_analysis.ipynb`
+4. `RQ2_ethical_analysis.ipynb`
 
 The cells of each notebook must be run in order, and cells should not be re-run independently (in order to avoid silent errors).
 
@@ -145,8 +139,8 @@ Mean metrics across seeds:
 
 |    Model     | Macro-F1  |  QWK    |
 |--------------|-----------|---------|
-| Baseline     |   0.512   |  0.419  |
-| Hierarchical |   0.516   |  0.422  |
+| Baseline     |   0.512 ± 0.0004    |  0.419 ± 0.0015 |
+| Hierarchical |   0.516 ± 0.0002    |  0.422 ± 0.0016 |
 | Difference   |   +0.004  | +0.003  |
 
 The hierarchical model slightly outperforms the baseline model across seeds, but the improvement is very small. This suggests that sibling-topic history contains some additional predictive signal, but the effect is weak.
