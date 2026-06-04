@@ -103,7 +103,7 @@ MLBD-project/
     ├── math_tuning_results.json        # Math hyperparameter search results
     ├── german_bestmodel.weights.h5     # Best German DKT checkpoint
     └── german_tuning_results.json      # German hyperparameter search results
-└── DKT - prerequisites networks/ # We stored the obtained prerequisites networks obtained in the DKT study here, if you are curious to explore more in depth
+└── rapport/ # Here are stored the prerequisite networks obtained from the DKT analysis for further exploration
     ├── skill_curriculum_german.html 
     ├── skill_curriculum_math.html
 ```
